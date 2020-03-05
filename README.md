@@ -1,4 +1,4 @@
-# 满分Some config of nice proxy tools.
+# Some config of nice proxy tools.
 Most collected
 
 
