@@ -1,1 +1,20 @@
 
+# Apple Global CDN
+#
+# iOS App Store
+DOMAIN,iosapps.itunes.apple.com,Apple CDN
+# Mac App Store
+DOMAIN,osxapps.itunes.apple.com,Apple CDN
+# Update
+DOMAIN,supportdownload.apple.com,Apple CDN
+# Update
+DOMAIN,appldnld.apple.com,Apple CDN
+# Update
+DOMAIN,swcdn.apple.com,Apple CDN
+DOMAIN,apptrailers.itunes.apple.com,Apple CDN
+DOMAIN,updates-http.cdn-apple.com,Apple CDN
+# App Store & iTunes Images
+DOMAIN-SUFFIX,mzstatic.com,Apple CDN
+# Mac App Store
+# iOS App Store
+USER-AGENT,com.apple.appstored*,Apple CDN
