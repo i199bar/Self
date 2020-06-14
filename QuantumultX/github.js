@@ -40,7 +40,7 @@ const repositories = [
     name: "zZPiglet 脚本",
     url: "https://github.com/zZPiglet/Task"
   }
-   {
+  {
     name: "yichahucha 脚本",
     url: "https://github.com/yichahucha/surge/tree/master"
   }
