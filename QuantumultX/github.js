@@ -39,11 +39,11 @@ const repositories = [
   {
     name: "zZPiglet 脚本",
     url: "https://github.com/zZPiglet/Task"
-  }
+  },
   {
     name: "yichahucha 脚本",
     url: "https://github.com/yichahucha/surge/tree/master"
-  }
+  },
   {
     name: "NobyDa -- 京豆签到",
     file_names: ["JD-DailyBonus"],
