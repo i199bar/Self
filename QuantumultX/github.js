@@ -51,11 +51,7 @@ const repositories = [
   },
 ];
 
-const debug = false;
-
-/******************** 转换器 ********************/
-let q=null!=$task,s=null!=$httpClient;var $task=q?$task:{},$httpClient=s?$httpClient:{},$prefs=q?$prefs:{},$persistentStore=s?$persistentStore:{},$notify=q?$notify:{},$notification=s?$notification:{};if(q){var errorInfo={error:""};$httpClient={get:(t,r)=>{var e;e="string"==typeof t?{url:t}:t,$task.fetch(e).then(t=>{r(void 0,t,t.body)},t=>{errorInfo.error=t.error,r(errorInfo,response,"")})},post:(t,r)=>{var e;e="string"==typeof t?{url:t}:t,t.method="POST",$task.fetch(e).then(t=>{r(void 0,t,t.body)},t=>{errorInfo.error=t.error,r(errorInfo,response,"")})}}}s&&($task={fetch:t=>new Promise((r,e)=>{"POST"==t.method?$httpClient.post(t,(t,e,o)=>{e?(e.body=o,r(e,{error:t})):r(null,{error:t})}):$httpClient.get(t,(t,e,o)=>{e?(e.body=o,r(e,{error:t})):r(null,{error:t})})})}),q&&($persistentStore={read:t=>$prefs.valueForKey(t),write:(t,r)=>$prefs.setValueForKey(t,r)}),s&&($prefs={valueForKey:t=>$persistentStore.read(t),setValueForKey:(t,r)=>$persistentStore.write(t,r)}),q&&($notification={post:(t,r,e)=>{$notify(t,r,e)}}),s&&($notify=function(t,r,e){$notification.post(t,r,e)});
-/******************** 转换器 ********************/
+const $ = API("github");
 
 const parser = {
   commits: new RegExp(
@@ -64,21 +60,17 @@ const parser = {
   releases: new RegExp(/^https:\/\/github.com\/([\w|-]+)\/([\w|-]+)\/releases/),
 };
 
-const baseURL = "https://api.github.com";
-
-Object.defineProperty(String.prototype, "hashCode", {
-  value: function () {
-    let hash = 0,
+function hash(str) {
+  let h = 0,
       i,
       chr;
-    for (i = 0; i < this.length; i++) {
-      chr = this.charCodeAt(i);
-      hash = (hash << 5) - hash + chr;
-      hash |= 0; // Convert to 32bit integer
+    for (i = 0; i < str.length; i++) {
+      chr = str.charCodeAt(i);
+      h = (h << 5) - h + chr;
+      h |= 0; // Convert to 32bit integer
     }
-    return String(hash);
-  },
-});
+    return String(h);
+}
 
 function parseURL(url) {
   try {
@@ -99,27 +91,24 @@ function parseURL(url) {
         branch: results[3] === undefined ? "HEAD" : results[4],
       };
     }
-    if (debug) {
-      console.log(repo);
-    }
+    $.log(repo);
     return repo;
   } catch (error) {
-    $notify("Github 监控", "", `❌ URL ${url} 解析错误！`);
+    $.notify("Github 监控", "", `❌ URL ${url} 解析错误！`);
     throw error;
   }
 }
 
 function needUpdate(url, timestamp) {
-  const storedTimestamp = $prefs.valueForKey(url.hashCode());
-  if (debug) {
-    console.log(`Stored Timestamp for ${url.hashCode()}: ` + storedTimestamp);
-  }
+  const storedTimestamp = $.read(hash(url));
+  $.log(`Stored Timestamp for ${hash(url)}: ` + storedTimestamp);
   return storedTimestamp === undefined || storedTimestamp !== timestamp
     ? true
     : false;
 }
 
 async function checkUpdate(item) {
+  const baseURL = "https://api.github.com";
   const { name, url } = item;
   const headers = {
     Authorization: `token ${token}`,
@@ -129,11 +118,10 @@ async function checkUpdate(item) {
   try {
     const repository = parseURL(url);
     if (repository.type === "releases") {
-      await $task
-        .fetch({
-          url: `${baseURL}/repos/${repository.owner}/${repository.repo}/releases`,
-          headers,
-        })
+      await $.get({
+        url: `${baseURL}/repos/${repository.owner}/${repository.repo}/releases`,
+        headers,
+      })
         .then((response) => {
           const releases = JSON.parse(response.body);
           if (releases.length > 0) {
@@ -141,30 +129,31 @@ async function checkUpdate(item) {
             const release_name = releases[0].name;
             const author = releases[0].author.login;
             const { published_at, body } = releases[0];
+            const notificationURL = {
+              "open-url": `https://github.com/${repository.owner}/${repository.repo}/releases`,
+              "media-url": `https://raw.githubusercontent.com/Orz-3/task/master/github.png`
+            }
             if (needUpdate(url, published_at)) {
-              $notify(
+              $.notify(
                 `🎉🎉🎉 [${name}] 新版本发布`,
                 `📦 版本: ${release_name}`,
                 `⏰ 发布于: ${formatTime(
                   published_at
-                )}\n👨🏻‍💻 发布者: ${author}\n📌 更新说明: \n${body}`
+                )}\n👨🏻‍💻 发布者: ${author}\n📌 更新说明: \n${body}`,
+                notificationURL
               );
-              if (!debug) {
-                $prefs.setValueForKey(published_at, url.hashCode());
-              }
+              $.write(published_at, hash(url));
             }
           }
         })
         .catch((e) => {
-          console.log(e);
-          $done();
+          $.error(e);
         });
     } else {
-      const { author, body, published_at, file_url } = await $task
-        .fetch({
-          url: `${baseURL}/repos/${repository.owner}/${repository.repo}/commits/${repository.branch}`,
-          headers,
-        })
+      const { author, body, published_at, file_url } = await $.get({
+        url: `${baseURL}/repos/${repository.owner}/${repository.repo}/commits/${repository.branch}`,
+        headers,
+      })
         .then((response) => {
           const { commit } = JSON.parse(response.body);
           const author = commit.committer.name;
@@ -174,36 +163,35 @@ async function checkUpdate(item) {
           return { author, body, published_at, file_url };
         })
         .catch((e) => {
-          console.log(e);
-          $done();
+          $.error(e);
         });
-      if (debug) {
-        console.log({ author, body, published_at, file_url });
+      $.log({ author, body, published_at, file_url });
+      const notificationURL = {
+        "open-url": `https://github.com/${repository.owner}/${repository.repo}/commits/${repository.branch}`,
+        "media-url": `https://raw.githubusercontent.com/Orz-3/task/master/github.png`
       }
       //监控仓库是否有更新
       if (!item.hasOwnProperty("file_names")) {
         if (needUpdate(url, published_at)) {
-          $notify(
+          $.notify(
             `🎈🎈🎈 [${name}] 新提交`,
             "",
             `⏰ 提交于: ${formatTime(
               published_at
-            )}\n👨🏻‍💻 发布者: ${author}\n📌 更新说明: \n${body}`
+            )}\n👨🏻‍💻 发布者: ${author}\n📌 更新说明: \n${body}`,
+            notificationURL
           );
           // update stored timestamp
-          if (!debug) {
-            $prefs.setValueForKey(published_at, url.hashCode());
-          }
+          $.write(published_at, hash(url));
         }
       }
       //找出具体的文件是否有更新
       else {
         const file_names = item.file_names;
-        await $task
-          .fetch({
-            url: file_url,
-            headers,
-          })
+        await $.get({
+          url: file_url,
+          headers,
+        })
           .then((response) => {
             const file_detail = JSON.parse(response.body);
             const file_list = file_detail.tree;
@@ -211,39 +199,32 @@ async function checkUpdate(item) {
               for (let j in file_names) {
                 if (file_list[i].path == file_names[j]) {
                   let file_hash = file_list[i].sha;
-                  let last_sha = $prefs.valueForKey(
-                    (item.name + file_names[j]).hashCode()
+                  let last_sha = $.read(
+                    hash(item.name + file_names[j])
                   );
-                  if (debug) last_sha = "111";
                   if (file_hash != last_sha) {
-                    $notify(`🐬 [${name}]`, "", `📌 ${file_names[j]}有更新`);
-                    if (!debug)
-                      $prefs.setValueForKey(
-                        file_hash,
-                        (item.name + file_names[j]).hashCode()
-                      );
+                    $.notify(`🐬 [${name}]`, "", `📌 ${file_names[j]}有更新`, notificationURL);
+                    $.write(file_hash, hash(item.name + file_names[j]));
                   }
-                  if (debug) {
-                    console.log(
-                      `🐬 ${
-                        file_names[j]
-                      }：\n\tlast sha: ${last_sha}\n\tlatest sha: ${file_hash}\n\t${
-                        file_hash == last_sha ? "✅当前已是最新" : "🔅需要更新"
-                      }`
-                    );
-                  }
+
+                  $.log(
+                    `🐬 ${
+                      file_names[j]
+                    }：\n\tlast sha: ${last_sha}\n\tlatest sha: ${file_hash}\n\t${
+                      file_hash == last_sha ? "✅当前已是最新" : "🔅需要更新"
+                    }`
+                  );
                 }
               }
             }
           })
           .catch((e) => {
-            console.log(e);
-            $done();
+            $.error(e);
           });
       }
     }
   } catch (e) {
-    console.log(`❌ 请求错误: ${e}`);
+    $.error(`❌ 请求错误: ${e}`);
     return;
   }
   return;
@@ -258,4 +239,9 @@ function formatTime(timestamp) {
 
 Promise.all(
   repositories.map(async (item) => await checkUpdate(item))
-).then(() => $done());
+).finally(() => $.done());
+
+// prettier-ignore
+/*********************************** API *************************************/
+function API(i="untitled",t=!1){return new class{constructor(i,t){this.name=i,this.debug=t,this.isQX="undefined"!=typeof $task,this.isLoon="undefined"!=typeof $loon,this.isSurge="undefined"!=typeof $httpClient&&!this.isLoon,this.isNode="function"==typeof require,this.node=(()=>this.isNode?{request:require("request"),fs:require("fs")}:null)(),this.cache=this.initCache(),this.log(`INITIAL CACHE:\n${JSON.stringify(this.cache)}`),Promise.prototype.delay=function(i){return this.then(function(t){return((i,t)=>new Promise(function(e){setTimeout(e.bind(null,t),i)}))(i,t)})}}get(i){return this.isQX?("string"==typeof i&&(i={url:i,method:"GET"}),$task.fetch(i)):this.isLoon||this.isSurge?$httpClient.get(i):this.isNode?new Promise((t,e)=>{this.node.request(i,(i,s)=>{i?e(i):t(s)})}):void 0}post(i){return this.isQX?$task.fetch(i):this.isLoon||this.isSurge?$httpClient.post(i):this.isNode?new Promise((t,e)=>{this.node.request.post(i,(i,s)=>{i?e(i):t(s)})}):void 0}initCache(){if(this.isQX)return $prefs.valueForKey(this.name)||{};if(this.isLoon||this.isSurge)return $persistentStore.read(this.name)||{};if(this.isNode){const i=`${this.name}.json`;return this.node.fs.existsSync(i)?JSON.parse(this.node.fs.readFileSync(`${this.name}.json`)):(this.node.fs.writeFileSync(i,JSON.stringify({}),{flag:"wx"},i=>console.log(i)),{})}}persistCache(){const i=this.cache;this.isQX&&$prefs.setValueForKey(i,this.name),this.isSurge&&$persistentStore.write(i,this.name),this.isNode&&this.node.fs.writeFileSync(`${this.name}.json`,JSON.stringify(i),{flag:"w"},i=>console.log(i))}write(i,t){this.log(`SET ${t} = ${i}`),this.cache={...this.cache,[t]:i}}read(i){return this.log(`READ ${i}`),this.cache[i]}delete(i){this.log(`DELETE ${i}`),this.write(void 0,i)}notify(i,t,e,s){const o="string"==typeof s?s:void 0,n=e+(null==o?"":`\n${o}`);this.isQX&&(void 0!==o?$notify(i,t,e,{"open-url":o}):$notify(i,t,e,s)),this.isSurge&&$notification.post(i,t,n),this.isLoon&&$notification.post(i,t,e,o||s["open-url"]),this.isNode&&("undefined"==typeof $app?console.log(`${i}\n${t}\n${n}`):require("push").schedule({title:i,body:t?t+"\n"+e:e}))}log(i){this.debug&&console.log(i)}info(i){console.log(i)}error(i){this.log("ERROR: "+i)}wait(i){return new Promise(t=>setTimeout(t,i))}done(i={}){this.persistCache(),this.isQX&&$done(i),(this.isLoon||this.isSurge)&&$done(i)}}(i,t)}
+/*****************************************************************************/
