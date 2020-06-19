@@ -46,7 +46,7 @@ const repositories = [
   },
   {
     name: "DivineEngine 规则",
-    url: "https://github.com/DivineEngine/Profiles/tree/master/Quantumult",
+    url: "https://github.com/DivineEngine/Profiles/tree/master",
   },  
 ];
 
